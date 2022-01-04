@@ -176,7 +176,7 @@ def main(args):
     c1.subheader('Recommended Articles')
     c2 = st.container()
     c2.subheader('Daily Articles [As of 24 Nov 21]')
-    sn = domain_media_df.loc[sn,'media_item_id']
+    sn = domain_media_df.loc[sn]['media_item_id'].tolist()
     sn = df[df.media_item_id.isin(sn)].index.tolist()
     render(container = c1, container2=c2, domain_media_df=domain_media_df, **{'domain':du, 'rep_vectors':rep_vectors, 'faiss_index':index, 'df':df, 
         'head2ix':head2ix, 'embeddings':embeddings, 'model':model, 'language':lang, 'favor':sn, 'sensitivity':sensitivity})
