@@ -46,8 +46,7 @@ def load(path):
 
 def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, display_top_n=20, 
     search_n_per_signpost=5000, language='any', debug=False, favor='na', sensitivity=0.48):
-    favor = [f.strip() for f in favor.split(',')]
-    if all([sn.isnumeric() for sn in favor]):
+    if len(sn) > 0:
         favor = [int(sn) for sn in favor]
         _, scores, indices = faiss_index.range_search(embeddings[favor,:], sensitivity)
     else:
@@ -176,8 +175,14 @@ def main(args):
     c1.subheader('Recommended Articles')
     c2 = st.container()
     c2.subheader('Daily Articles [As of 24 Nov 21]')
-    sn = domain_media_df.loc[sn]['media_item_id'].tolist()
-    sn = df[df.media_item_id.isin(sn)].index.tolist()
+    sn = [s.strip() for s in sn.split(',')]
+    if all([s.isnumeric() for s in sn]):
+        sn = [int(s) for s in sn]
+        sn = domain_media_df.loc[sn]['media_item_id'].tolist()
+        sn = df[df.media_item_id.isin(sn)].index.tolist()
+    else:
+        sn = []
+    
     render(container = c1, container2=c2, domain_media_df=domain_media_df, **{'domain':du, 'rep_vectors':rep_vectors, 'faiss_index':index, 'df':df, 
         'head2ix':head2ix, 'embeddings':embeddings, 'model':model, 'language':lang, 'favor':sn, 'sensitivity':sensitivity})
 
