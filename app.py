@@ -46,7 +46,7 @@ def load(path):
 
 def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, display_top_n=20, 
     search_n_per_signpost=5000, language='any', debug=False, favor='na', sensitivity=0.48):
-    if len(sn) > 0:
+    if len(favor) > 0:
         favor = [int(sn) for sn in favor]
         _, scores, indices = faiss_index.range_search(embeddings[favor,:], sensitivity)
     else:
