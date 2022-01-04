@@ -178,8 +178,6 @@ def main(args):
     sn = [s.strip() for s in sn.split(',')]
     if all([s.isnumeric() for s in sn]):
         sn = [int(s) for s in sn]
-        sn = domain_media_df.loc[sn]['media_item_id'].tolist()
-        sn = df[df.media_item_id.isin(sn)].index.tolist()
         logger.info(df.loc[sn].title)
     else:
         sn = []
