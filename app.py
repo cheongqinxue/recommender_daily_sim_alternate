@@ -20,45 +20,28 @@ class Args:
     
 FS = s3fs.S3FileSystem(anon=False)
 
+@st.cache
 def load(path):
-    if 'df' in st.session_state and 'emb' in st.session_state and 'index' in st.session_state:
-        df = st.session_state['df']
-        emb = st.session_state['emb']
-        index = st.session_state['index']
-    else: 
-        if FS is None:
-            df = joblib.load(path+'/df.joblib')
-            df = df.reset_index(drop=True).reset_index()            
-            df = df.sort_values(by='published_date', ascending=False)
-            emb = np.load(path+'/embeds.npy')
-        else:
-            with FS.open(path+'/df.joblib') as f:
-                df = joblib.load(f)
-            with FS.open(path+'/embeds.npy') as f:
-                emb = np.load(f)
-            df = df.reset_index(drop=True).reset_index()
-            df = df.sort_values(by='published_date', ascending=False)
-            
-        st.session_state['df'] = df
-        st.session_state['emb'] = emb
+    if FS is None:
+        df = joblib.load(path+'/df.joblib')
+        emb = np.load(path+'/embeds.npy')
+        domain_media = joblib.load(path+'/domain_media_df.joblib')
+    else:
+        with FS.open(path+'/df.joblib') as f:
+            df = joblib.load(f)
+        with FS.open(path+'/embeds.npy') as f:
+            emb = np.load(f)
+        with FS.open(path+'/domain_media_df.joblib') as f:
+            domain_media = joblib.load(f)
 
-        string_factory = 'IVF512,Flat'
-        print('Building index...', end='')
-        index = faiss.index_factory(384, string_factory, METRIC_INNER_PRODUCT)
-    
-    if not index.is_trained:
-        index.train(emb)
-        index.add(emb)
-        index.nprobe = 12
-        st.session_state['index'] = index
-        
-    logger.info(f'Size of dataframe: {len(df)}')
-    logger.info(f'Size of embeddings: {len(emb)}')
-    
-    #34781
-    logger.info(f'Random check: {df.loc[[26, 190, 206, 304, 320],:]}')
+    string_factory = 'IVF256,Flat'
+    print('Building index...', end='')
+    index = faiss.index_factory(384, string_factory, METRIC_INNER_PRODUCT)    
+    index.train(emb)
+    index.add(emb)
+    index.nprobe = 12
 
-    return df, emb, index
+    return df, domain_media, emb, index
 
 
 def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, display_top_n=20, 
@@ -85,7 +68,7 @@ def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, dis
 
     indices_ = np.asarray(indices)[topn].tolist()
     scores_ = scores[topn].numpy().tolist()
-    resultdf = df.loc[indices_,:].drop(columns=['media_item_id','name'])
+    resultdf = df.iloc[indices_,:].drop(columns=['media_item_id'])
     resultdf['score'] = scores_
     resultdf = resultdf.drop_duplicates(subset='title')
     if language != 'any':
@@ -131,8 +114,8 @@ def render(container, container2, **kwargs):
             margin=dict(l=20, r=20, t=5, b=5),height=250)
         container.plotly_chart(fig, use_container_width=True)
 
-        ddf = kwargs['df']
-        ddf = ddf[ddf.name==kwargs['domain']]
+        ddf = domain_media_df[domain_media_df.name==kwargs['domain']]
+        ddf = ddf.merge(kwargs['df'], how='left', on='media_item_id')
         if kwargs['language']!='any':
             ddf = ddf[ddf.language==kwargs['language']]
         ddf = ddf.head(50)
