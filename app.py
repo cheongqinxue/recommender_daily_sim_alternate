@@ -89,7 +89,7 @@ def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, dis
             return topn, indices
     return
 
-def render(container, container2, **kwargs):
+def render(container, container2, domain_media_df, **kwargs):
     resultdf = search(**kwargs)
 
     if resultdf is None:
@@ -140,7 +140,7 @@ def render(container, container2, **kwargs):
 
 
 def main(args):
-    df, embeddings, index = load(args.datapath)
+    df, domain_media_df, embeddings, index = load(args.datapath)
     languages = ['any','en','es','pt'] + sorted(list(df.dropna(subset=['language']).language.unique()))
 
     model, head2ix = TransRBipartiteModel.load_pretrained(args.modelpath, fh=FS)
@@ -176,7 +176,7 @@ def main(args):
     c1.subheader('Recommended Articles')
     c2 = st.container()
     c2.subheader('Daily Articles [As of 24 Nov 21]')
-    render(container = c1, container2=c2, **{'domain':du, 'rep_vectors':rep_vectors, 'faiss_index':index, 'df':df, 
+    render(container = c1, container2=c2, domain_media_df=domain_media_df, **{'domain':du, 'rep_vectors':rep_vectors, 'faiss_index':index, 'df':df, 
         'head2ix':head2ix, 'embeddings':embeddings, 'model':model, 'language':lang, 'favor':sn, 'sensitivity':sensitivity})
 
 
