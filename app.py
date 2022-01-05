@@ -46,12 +46,27 @@ def load(path):
 
 def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, display_top_n=20, 
     search_n_per_signpost=5000, language='any', debug=False, favor='na', sensitivity=0.48):
+
+    reps = torch.vstack(rep_vectors['rep_vectors'][domain])
+    scores, indices = faiss_index.search(reps.numpy(), 
+        search_n_per_signpost)
+
     if len(favor) > 0:
         favor = [int(sn) for sn in favor]
-        _, scores, indices = faiss_index.range_search(embeddings[favor,:], sensitivity)
+        fscores, findices = faiss_index.search(embeddings[favor,:], 100)
+        fscores = fscores.reshape(-1)
+        findices = findices.reshape(-1)
+        tmp = pd.DataFrame({'fscores':fscores, 'findices':findices}).drop_duplicates(subset='findices')
+        findices = tmp.findices.tolist()
+        reps = torch.cat((reps, torch.tensor(embeddings[favor,:])), 0)
+        conviction = torch.cosine_similarity(
+            torch.tensor(embeddings[findices,:]).unsqueeze(1),
+            reps, dim=-1).mean(-1).numpy() * 0.3 + 0.7
+        fscores = tmp.fscores.values * conviction * sensitivity * 0.3 + 0.7
+        del tmp
     else:
-        scores, indices = faiss_index.search(torch.vstack(rep_vectors['rep_vectors'][domain]).numpy(), 
-            search_n_per_signpost)
+        fscores, findices = [], []
+
     indices = list(set(indices.reshape(-1).tolist()))
 
     with torch.no_grad():
@@ -62,8 +77,11 @@ def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, dis
                 r_idx=torch.tensor([0], device = 'cpu'),
                 t_idx=None,
                 new_tails=te)
-        scores = torch.tanh(scores+2.5)
+        scores = torch.cat((torch.tanh(scores+2.5), torch.tensor(fscores)), -1)
         topn = torch.argsort(scores, descending=True)[:max(300, int(search_n_per_signpost/4))].tolist()
+
+    indices += findices
+
 
     indices_ = np.asarray(indices)[topn].tolist()
     scores_ = scores[topn].numpy().tolist()
@@ -163,11 +181,9 @@ def main(args):
                                             options=[i/20 for i in range(21)], value=0.5)
     
     st.sidebar.markdown('#### In-session Recommendations Simulator')
-    explanation = ('The recomendations panel lists the top 15 recommended articles for the domain unit. To see how the recommendations '
-                   'change with a reading history, use the text-input above to enter serial numbers of the articles appearing in the daily '
-                   'articles panel. The recommender first searches the past 3 days\' archive for articles similar to the reading history. '
-                   'The sensitivity slider limits how many archived articles are extracted based on their similarity to the reading history. '
-                   'The extracted articles are then re-ranked using their recommendation scores and displayed in the recommendations panel.'
+    explanation = ('Use the text-inputs above to simulate your own recent reading history. Enter the serial numbers of articles from the daily panel '
+                   'to find other articles like them. For instance, enter "2835" to find more platinium-mining related news. \n A longer reading history list will prompt the recommender to give more weight to the recent '
+                   'reading history when searching for articles. All articles come from a 3-day (22 Nov to 24 Nov) window.'
                   )
     st.sidebar.markdown(explanation)
     
