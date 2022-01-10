@@ -11,6 +11,7 @@ import requests
 import plotly.graph_objects as go
 import s3fs
 import logging
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -44,30 +45,51 @@ def load(path):
     return df, domain_media, emb, index
 
 
-def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, display_top_n=20, 
-    search_n_per_signpost=5000, language='any', debug=False, favor='na', sensitivity=0.48):
+def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, display_top_n=10, 
+    search_n_per_signpost=5000, language='any', debug=False, favor='na', sensitivity=0.4):
 
     reps = torch.vstack(rep_vectors['rep_vectors'][domain])
-    scores, indices = faiss_index.search(reps.numpy(), 
-        search_n_per_signpost)
 
     if len(favor) > 0:
         favor = [int(sn) for sn in favor]
-        fscores, findices = faiss_index.search(embeddings[favor,:], 100)
-        fscores = fscores.reshape(-1)
-        findices = findices.reshape(-1)
-        tmp = pd.DataFrame({'fscores':fscores, 'findices':findices}).drop_duplicates(subset='findices')
-        findices = tmp.findices.tolist()
-        reps = torch.cat((reps, torch.tensor(embeddings[favor,:])), 0)
-        conviction = torch.cosine_similarity(
-            torch.tensor(embeddings[findices,:]).unsqueeze(1),
-            reps, dim=-1).mean(-1).numpy() * 0.3 + 0.7
-        fscores = tmp.fscores.values * conviction * sensitivity * 0.3 + 0.7
-        del tmp
-    else:
-        fscores, findices = [], []
 
-    indices = list(set(indices.reshape(-1).tolist()))
+        k = display_top_n*30 if language != 'any' else math.ceil(display_top_n/len(favor))
+
+        scores, indices = faiss_index.search(embeddings[favor,:], display_top_n*20)
+
+        if language != 'any':
+            tmp = []
+            for indices_ in indices:
+                indices_ = indices_.tolist()
+                languages = df.loc[indices_,:]['language'].tolist()
+                indices_ = [ix for ix, l in zip(indices_, languages) if str(l) in language]
+                indices_ = indices_[:math.ceil(display_top_n/len(favor))]
+                tmp.append(indices_)
+            indices = np.asarray(tmp)
+        else:
+            tmp = []
+            for indices_ in indices:
+                indices_ = indices_.tolist()
+                languages = df.loc[indices_,:]['language'].tolist()
+                indices_ = [ix for ix, l in zip(indices_, languages)]
+                indices_ = indices_[:math.ceil(display_top_n/len(favor))]
+                tmp.append(indices_)
+            indices = np.asarray(tmp)
+
+        indices = [ix for ix in indices.reshape(-1).tolist() if ix not in favor]
+        
+
+        # index_set = []
+        # for ix in indices:
+        #     if ix not in index_set:
+        #         index_set.append(ix)
+        # indices = index_set[:display_top_n]
+    else:
+        _, indices = faiss_index.search(reps.numpy(), search_n_per_signpost)  
+        indices = list(set(indices.reshape(-1).tolist()))
+        if language != 'any':
+            languages = df.iloc[indices,:]['language'].tolist()
+            indices = [ix for ix, l in zip(indices, languages) if str(l) in language]
 
     with torch.no_grad():
         h = head2ix[domain]
@@ -77,11 +99,8 @@ def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, dis
                 r_idx=torch.tensor([0], device = 'cpu'),
                 t_idx=None,
                 new_tails=te)
-        scores = torch.cat((torch.tanh(scores+2.5), torch.tensor(fscores)), -1)
+        scores = torch.tanh(scores+2.5)
         topn = torch.argsort(scores, descending=True)[:max(300, int(search_n_per_signpost/4))].tolist()
-
-    indices += findices
-
 
     indices_ = np.asarray(indices)[topn].tolist()
     scores_ = scores[topn].numpy().tolist()
@@ -177,8 +196,8 @@ def main(args):
     sn = st.sidebar.text_input(label = 'Enter the serial numbers of news from the daily listing to simulate in-session reading activity', 
                                help = 'To simulate reading of one or more news articles, enter the serial number of the article listed under the "Sn" column separated by a comma. E.g.225210,175694')
     
-    sensitivity = st.sidebar.select_slider('Choose how sensitive the recommender will be to in-session reading activity (higher = more sensitive)', 
-                                            options=[i/20 for i in range(21)], value=0.5)
+    # sensitivity = st.sidebar.select_slider('Choose how sensitive the recommender will be to in-session reading activity (higher = more sensitive)', 
+    #                                         options=[i/20 for i in range(21)], value=0.5)
     
     st.sidebar.markdown('#### In-session Recommendations Simulator')
     explanation = ('Use the text-inputs above to simulate your own recent reading history. Enter the serial numbers of articles from the daily panel '
@@ -199,7 +218,7 @@ def main(args):
         sn = []
     
     render(container = c1, container2=c2, domain_media_df=domain_media_df, **{'domain':du, 'rep_vectors':rep_vectors, 'faiss_index':index, 'df':df, 
-        'head2ix':head2ix, 'embeddings':embeddings, 'model':model, 'language':lang, 'favor':sn, 'sensitivity':sensitivity})
+        'head2ix':head2ix, 'embeddings':embeddings, 'model':model, 'language':lang, 'favor':sn})
 
 
 if __name__ == '__main__':
