@@ -80,7 +80,7 @@ def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, dis
         
 
         # index_set = []
-        # for ix in indices:
+        # for ix in indices: 
         #     if ix not in index_set:
         #         index_set.append(ix)
         # indices = index_set[:display_top_n]
