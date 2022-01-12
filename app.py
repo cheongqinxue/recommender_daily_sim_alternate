@@ -80,7 +80,7 @@ def search(domain, rep_vectors, faiss_index, df, head2ix, embeddings, model, dis
         
 
         # index_set = []
-        # for ix in indices: 
+        # for ix in indices:
         #     if ix not in index_set:
         #         index_set.append(ix)
         # indices = index_set[:display_top_n]
@@ -223,4 +223,18 @@ def main(args):
 
 if __name__ == '__main__':
     args = Args()
-    main(args)
+    
+    with st.sidebar.form("password", clear_on_submit=True):
+        
+        pwd_ = st.text_input(label='Enter Password')
+
+        # Every form must have a submit button.
+        submitted = st.form_submit_button("Submit")
+    
+    if submitted:
+        if pwd_ == st.secrets['PASSWORD']:
+            st.balloons()
+            main(args)
+        else:
+            st.error('Wrong password')
+            st.stop()
