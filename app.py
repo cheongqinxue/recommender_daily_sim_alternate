@@ -16,8 +16,8 @@ import math
 logger = logging.getLogger(__name__)
 
 class Args:
-    datapath = 's3://qx-poc-public/recommender-daily'
-    modelpath = 's3://qx-poc-public/recommender/transrBipartite-marginloss0_5-800epoch-5neg'
+    datapath = st.secrets['DATAPATH']
+    modelpath = st.secrets['MODELPATH']
     
 FS = s3fs.S3FileSystem(anon=False)
 
